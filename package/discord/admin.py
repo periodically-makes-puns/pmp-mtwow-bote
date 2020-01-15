@@ -1,5 +1,6 @@
-from discord.ext import commands
 import logging
+
+from discord.ext import commands
 
 discord_logger = logging.getLogger('discord')
 
@@ -46,6 +47,7 @@ class Administrator(commands.Cog):
             await ctx.send("Failed to load extension {0:s}: {0:s} was already loaded.".format(module))
         except commands.ExtensionFailed:
             await ctx.send("Failed to load extension {0:s}: {0:s} errored in its entry function.".format(module))
+
 
 
 def setup(bot: commands.Bot):

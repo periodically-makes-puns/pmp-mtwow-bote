@@ -1,7 +1,6 @@
-import logging
 import json
+import logging
 import sys
-from typing import Tuple, Union
 
 time_units = [24 * 60 * 60 * 1000, 60 * 60 * 1000, 60 * 1000, 1000, 1]
 
@@ -115,6 +114,9 @@ def load_data(filename) -> dict:
     if data.get("token") is None:
         discord_logger.critical("Could not load token! Aborting")
         sys.exit(1)
+    if data.get("db") is None:
+        discord_logger.warning("No database file specified. Will assume db filename of 'mtwow.sqlite'.")
+        data["db"] = "mtwow.sqlite"
     if data.get("owner") is None:
         discord_logger.warning("No owner specified. Will assume owner from Discord application info.")
     if data.get("primaryServer") is None:

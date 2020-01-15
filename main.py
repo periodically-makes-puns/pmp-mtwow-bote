@@ -1,8 +1,11 @@
 import logging
 from package.common.utils import data
 import sys
+
 import discord
 from discord.ext import commands
+
+from package.common.sqlhandle import SQLThread
 
 desc = """A generic miniTWOW Discord bot and website.
 Maintainer is currently PMPuns#5728."""
@@ -17,6 +20,8 @@ sql_logger.addHandler(handler)
 bot = commands.Bot(command_prefix=data["prefix"], description=desc)
 extensions = ["discord.admin"]
 
+
+sqlthread = SQLThread(data["db"])
 
 @bot.event
 async def on_ready():
@@ -47,16 +52,22 @@ async def on_message(message: discord.Message):
     await bot.process_commands(message)
 
 
+@bot.event
+async def on_command_error(ctx: commands.Context, error: commands.CommandError):
+    if isinstance(error, commands.NotOwner):
+        await ctx.send("You are not the owner >:(", delete_after=5)
+
+
 @bot.command(brief="Kills the bot.")
-@commands.check(commands.is_owner())
+@commands.is_owner()
 async def kill(ctx: commands.Context):
     discord_logger.info("Received shutdown command from {:s}".format(str(ctx.message.author)))
-    bot.close()
+    await bot.close()
     sys.exit(0)
 
 
 @bot.command(brief="Loads starting extensions.")
-@commands.check(commands.is_owner())
+@commands.is_owner()
 async def load_default(ctx: commands.Context):
     discord_logger.info("Received load_all command from {:s}".format(str(ctx.message.author)))
     count = 0
@@ -76,7 +87,7 @@ async def load_default(ctx: commands.Context):
 
 
 @bot.command(brief="Reloads all extensions.")
-@commands.check(commands.is_owner())
+@commands.is_owner()
 async def reload_all(ctx: commands.Context):
     discord_logger.info("Received reload_all command from {:s}".format(str(ctx.message.author)))
     count = 0
