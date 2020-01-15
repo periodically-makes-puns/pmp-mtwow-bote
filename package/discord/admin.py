@@ -5,6 +5,8 @@ discord_logger = logging.getLogger('discord')
 
 
 class Administrator(commands.Cog):
+    """Cog that provides generic administrator commands to the owner."""
+
     @commands.command(brief="Reloads a module.")
     @commands.is_owner()
     async def reload(self, ctx: commands.Context, module: str):
@@ -22,7 +24,7 @@ class Administrator(commands.Cog):
                     module))
 
     @commands.command(brief="Unloads a module.")
-    @commands.check(commands.is_owner())
+    @commands.is_owner()
     async def unload(self, ctx: commands.Context, module: str):
         discord_logger.info("{:s} issued command to unload module {:s}".format(str(ctx.message.author), module))
         try:
@@ -48,9 +50,9 @@ class Administrator(commands.Cog):
 
 def setup(bot: commands.Bot):
     bot.add_cog(Administrator())
-    discord_logger.info("Loaded extension generic.admin")
+    discord_logger.info("Loaded extension discord.admin")
 
 
 def teardown(bot: commands.Bot):
     bot.remove_cog("Administrator")
-    discord_logger.info("Unloaded extension generic.admin")
+    discord_logger.info("Unloaded extension discord.admin")

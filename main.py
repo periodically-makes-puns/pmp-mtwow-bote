@@ -3,7 +3,6 @@ from package.common.utils import data
 import sys
 import discord
 from discord.ext import commands
-import sqlite3
 
 desc = """A generic miniTWOW Discord bot and website.
 Maintainer is currently PMPuns#5728."""
@@ -16,8 +15,7 @@ handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(me
 discord_logger.addHandler(handler)
 sql_logger.addHandler(handler)
 bot = commands.Bot(command_prefix=data["prefix"], description=desc)
-
-extensions = ["common.admin"]
+extensions = ["discord.admin"]
 
 
 @bot.event

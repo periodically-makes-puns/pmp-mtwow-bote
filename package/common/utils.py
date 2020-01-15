@@ -6,9 +6,13 @@ from typing import Tuple, Union
 time_units = [24 * 60 * 60 * 1000, 60 * 60 * 1000, 60 * 1000, 1000, 1]
 
 
-def parse_time(time: str) -> Tuple[int, Union[int, str]]:
-    """ format = XXDXXhXXmXXsXXX
-        alt format = XX:XX:XX:XX.XXX
+class InvalidTimeStringError(Exception):
+    pass
+
+def parse_time(time: str) -> int:
+    """Parses times in the format:
+    format = XXDXXhXXmXXsXXX
+    alt format = XX:XX:XX:XX.XXX
     """
     res = 0
     token = time.split(":")
@@ -16,61 +20,42 @@ def parse_time(time: str) -> Tuple[int, Union[int, str]]:
         # Use alt format
         ind = 4 - len(token)
         for i in range(len(token) - 1):  # don't process last term
-            try:
-                res += time_units[ind] * int(token[i])
-            except ValueError:
-                return (2, "Could not parse time.")
+            res += time_units[ind] * int(token[i])
+            ind += 1
         # parse last term
-        res = token[-1].partition(".")
-        if res[1] != ".":  # no decimal point
-            try:
-                res += int(res[0] * 1000)
-                res += int(res[2])
-            except ValueError:
-                return (2, "Could not parse time.")
+        a = token[-1].partition(".")
+        res += int(a[0]) * time_units[ind]
+        if a[1] == ".":  # decimal point
+            res += int(a[2])
     else:
         a = time.partition("d")
         if a[1] == "d":
-            try:
-                res += 24 * 60 * 60 * 1000 * int(a[0])
-            except ValueError:
-                return (2, "Could not parse time.")
+            res += 24 * 60 * 60 * 1000 * int(a[0])
             a = a[2].partition("h")
         else:
             a = a[0].partition("h")
         if a[1] == "h":
-            try:
-                res += 60 * 60 * 1000 * int(a[0])
-            except ValueError:
-                return (2, "Could not parse time.")
+            res += 60 * 60 * 1000 * int(a[0])
             a = a[2].partition("m")
         else:
             a = a[0].partition("m")
         if a[1] == "m":
-            try:
-                res += 60 * 1000 * int(a[0])
-            except ValueError:
-                return (2, "Could not parse time.")
+            res += 60 * 1000 * int(a[0])
             a = a[2].partition("s")
         else:
             a = a[0].partition("s")
         if a[1] == "s":
-            try:
-                res += 24 * 60 * 60 * 1000 * int(a[0])
-            except ValueError:
-                return (2, "Could not parse time.")
+            res += 24 * 60 * 60 * 1000 * int(a[0])
             a = a[2]
         else:
             a = a[0]
-        try:
-            if len(a) > 0:
-                res += int(a)
-        except ValueError:
-            return (2, "Could not parse time.")
-    return (0, res)
+        if len(a) > 0:
+            res += int(a)
+    return res
 
 
 class ColoredTerminalLogger(logging.Logger):
+    """Logger that extends the basic logger's features to include ANSI color escape codes."""
     FAIL = "\033[38;5;9m"
     INFO = "\033[38;5;244m"
     WARN = "\033[38;5;214m"
@@ -120,8 +105,9 @@ logging.setLoggerClass(ColoredTerminalLogger)
 discord_logger = logging.getLogger("discord")
 
 
-def load_data() -> dict:
-    with open("secrets.json", "r") as f:
+def load_data(filename) -> dict:
+    """Loads configuration data from filename."""
+    with open(filename, "r") as f:
         data = json.load(f)
     if data is None:
         discord_logger.critical("Could not load data parameters! Aborting")
@@ -142,7 +128,8 @@ def load_data() -> dict:
     return data
 
 
-data = load_data()
+data = load_data("secrets.json")
+"""Contains the configuration data."""
 
 if __name__ == "__main__":
     ColoredTerminalLogger.test()
