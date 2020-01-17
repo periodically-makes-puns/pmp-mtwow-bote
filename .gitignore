@@ -3,5 +3,6 @@ secrets.json
 .idea
 __pycache__
 *.sqlite
-*.db
+backups
 tests
+logs

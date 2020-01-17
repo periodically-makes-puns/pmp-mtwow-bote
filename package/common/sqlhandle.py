@@ -65,14 +65,17 @@ class SQLThread(Thread):
             sql_thread_logger.debug("Handling oid {:d}".format(oid))
             self.sql_resource.acquire()
             cursor = self.conn.cursor()
-            if isinstance(ops, list):
-                for statement, params in ops:
+            try:
+                if isinstance(ops, list):
+                    for statement, params in ops:
+                        cursor.execute(statement, params)
+                else:
+                    statement, params = ops
                     cursor.execute(statement, params)
-            else:
-                statement, params = ops
-                cursor.execute(statement, params)
+                res = cursor.fetchall()
+            except sqlite3.Error as e:
+                res = e
             self.conn.commit()
-            res = cursor.fetchall()
             self.sql_resource.release()
             with lock_read(self.rwlock):
                 cond = self._results[oid]

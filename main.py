@@ -1,5 +1,6 @@
 import logging
 import sys
+import sqlite3
 
 from package.common.loggers import ColoredTerminalLogger
 logging.setLoggerClass(ColoredTerminalLogger)
@@ -28,8 +29,7 @@ sql_logger.addHandler(handler)
 sql_thread_logger.addHandler(handler)
 
 bot = commands.Bot(command_prefix=data["prefix"], description=desc)
-extensions = ["discord.admin"]
-
+extensions = ["discord.admin", "discord.sqlutils"]
 
 construct_schema(sqlthread)
 sql_thread_logger.debug("Constructed schema")
@@ -48,12 +48,13 @@ async def on_ready():
         try:
             bot.load_extension("package." + extension)
         except commands.ExtensionNotFound:
-            discord_logger.debug("Failed to load extension {:s}: Not found.".format(extension))
+            discord_logger.error("Failed to load extension {:s}: Not found.".format(extension))
         except commands.ExtensionAlreadyLoaded:
-            discord_logger.debug("Failed to load extension {0:s}: {0:s} was already loaded.".format(extension))
-        except commands.ExtensionFailed:
-            discord_logger.debug(
+            discord_logger.error("Failed to load extension {0:s}: {0:s} was already loaded.".format(extension))
+        except commands.ExtensionFailed as e:
+            discord_logger.error(
                 "Failed to load extension {0:s}: {0:s} errored in its entry function.".format(extension))
+            discord_logger.error(str(e.original))
 
 
 @bot.event
@@ -65,9 +66,14 @@ async def on_message(message: discord.Message):
 
 @bot.event
 async def on_command_error(ctx: commands.Context, error: commands.CommandError):
+    if isinstance(error, commands.CommandInvokeError):
+        error = error.original
+        print(error)
     if isinstance(error, commands.NotOwner):
         await ctx.send("You are not the owner >:(", delete_after=5)
-
+    elif isinstance(error, sqlite3.DatabaseError):
+        sql_logger.error(str(error))
+        await ctx.send("There was a SQL error while processing.", delete_after=5)
 
 @bot.command(brief="Kills the bot.")
 @commands.is_owner()
@@ -88,12 +94,13 @@ async def load_default(ctx: commands.Context):
             bot.load_extension("package." + extension)
             count += 1
         except commands.ExtensionNotFound:
-            discord_logger.debug("Failed to load extension {:s}: Not found.".format(extension))
+            discord_logger.error("Failed to load extension {:s}: Not found.".format(extension))
         except commands.ExtensionAlreadyLoaded:
-            discord_logger.debug("Failed to load extension {0:s}: {0:s} was already loaded.".format(extension))
-        except commands.ExtensionFailed:
-            discord_logger.debug(
+            discord_logger.error("Failed to load extension {0:s}: {0:s} was already loaded.".format(extension))
+        except commands.ExtensionFailed as e:
+            discord_logger.error(
                 "Failed to load extension {0:s}: {0:s} errored in its entry function.".format(extension))
+            discord_logger.error(str(e.original))
     await ctx.send("Loaded {:d} of {:d} extensions. Check debug logs for more details.".format(count, len(extensions)))
 
 
@@ -108,12 +115,13 @@ async def reload_all(ctx: commands.Context):
             bot.reload_extension("package." + extension)
             count += 1
         except commands.ExtensionNotFound:
-            discord_logger.debug("Failed to reload extension {:s}: Not found.".format(extension))
+            discord_logger.error("Failed to reload extension {:s}: Not found.".format(extension))
         except commands.ExtensionAlreadyLoaded:
-            discord_logger.debug("Failed to reload extension {0:s}: {0:s} was already loaded.".format(extension))
-        except commands.ExtensionFailed:
-            discord_logger.debug(
+            discord_logger.error("Failed to reload extension {0:s}: {0:s} was already loaded.".format(extension))
+        except commands.ExtensionFailed as e:
+            discord_logger.error(
                 "Failed to reload extension {0:s}: {0:s} errored in its entry function.".format(extension))
+            discord_logger.error(str(e.original))
     await ctx.send(
         "Reloaded {:d} of {:d} extensions. Check debug logs for more details.".format(count, len(extensions)))
 

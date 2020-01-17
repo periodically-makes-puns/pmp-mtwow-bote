@@ -14,45 +14,78 @@ class InvalidTimeStringError(Exception):
 def parse_time(time: str) -> int:
     """Parses times in the format:
     format = XXDXXhXXmXXsXXX
-    alt format = XX:XX:XX:XX.XXX
+    alt format = XX:XX:XX:XX dhms
+               = XX:XX:XX hms
+               = XX:XX hm
     """
     res = 0
     token = time.split(":")
     if len(token) > 1:
-        # Use alt format
-        ind = 4 - len(token)
-        for i in range(len(token) - 1):  # don't process last term
-            res += time_units[ind] * int(token[i])
-            ind += 1
-        # parse last term
-        a = token[-1].partition(".")
-        res += int(a[0]) * time_units[ind]
-        if a[1] == ".":  # decimal point
-            res += int(a[2])
+        if len(token) > 4:
+            raise InvalidTimeStringError("Too many colons")
+        if len(token) == 4:
+            try:
+                res += 24 * 60 * 60 * 1000 * int(token[0])
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
+            del token[0]
+        if len(token) == 3:
+            # parse seconds
+            a = token[2].partition(".")
+            try:
+                res += int(a[0]) * 1000
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
+            if a[1] == ".":
+                try:
+                    res += int(a[2])
+                except ValueError:
+                    raise InvalidTimeStringError("Could not parse integer")
+            del token[2]
+        try:
+            res += 60 * 60 * 1000 * int(token[0])
+            res += 60 * 1000 * int(token[1])
+        except ValueError:
+            raise InvalidTimeStringError("Could not parse integer")
     else:
         a = time.partition("d")
         if a[1] == "d":
-            res += 24 * 60 * 60 * 1000 * int(a[0])
+            try:
+                res += 24 * 60 * 60 * 1000 * int(a[0])
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
             a = a[2].partition("h")
         else:
             a = a[0].partition("h")
         if a[1] == "h":
-            res += 60 * 60 * 1000 * int(a[0])
+            try:
+                res += 60 * 60 * 1000 * int(a[0])
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
             a = a[2].partition("m")
         else:
             a = a[0].partition("m")
         if a[1] == "m":
-            res += 60 * 1000 * int(a[0])
+            try:
+                res += 60 * 1000 * int(a[0])
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
             a = a[2].partition("s")
         else:
             a = a[0].partition("s")
         if a[1] == "s":
-            res += 24 * 60 * 60 * 1000 * int(a[0])
+            try:
+                res += 1000 * int(a[0])
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
             a = a[2]
         else:
             a = a[0]
         if len(a) > 0:
-            res += int(a)
+            try:
+                res += int(a)
+            except ValueError:
+                raise InvalidTimeStringError("Could not parse integer")
     return res
 
 
@@ -84,6 +117,10 @@ def load_data(filename) -> dict:
     return data
 
 
+def name_string(user):
+    return user.name + "#" + user.discriminator
+
+
 discord_logger = logging.getLogger("discord")
 
 data = load_data("secrets.json")
@@ -91,6 +128,3 @@ data = load_data("secrets.json")
 
 sqlthread = SQLThread(data["db"])
 sqlthread.start()
-
-if __name__ == "__main__":
-    ColoredTerminalLogger.test()

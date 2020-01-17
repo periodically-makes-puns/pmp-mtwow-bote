@@ -1,24 +1,32 @@
 import logging
 import sqlite3
 from threading import Condition, get_ident
-from typing import Callable
+from typing import Callable, Tuple
+from collections import namedtuple
 
 from package.common.rwlock import lock_read
 from .sqlhandle import SQLThread
 
 sql_thread_logger = logging.getLogger("sqlitethread")
-
-def sql_util(func: Callable):
-    def nfunc(thread: SQLThread, *args, **kwargs):
-        cond = Condition()
-        cond.acquire()
-        oid = func(thread, cond, *args, **kwargs)
-        cond.wait()
-        return thread.get_result(oid)
-    return nfunc
+Status = namedtuple("Status", ["id", "round_num", "prompt", "phase", "deadline", "start_time"])
 
 
-@sql_util
+def sql_utility(ret_tuple=None):
+    def deco(func: Callable):
+        def nfunc(thread: SQLThread, *args, **kwargs):
+            cond = Condition()
+            cond.acquire()
+            oid = func(thread, cond, *args, **kwargs)
+            cond.wait()
+            res = thread.get_result(oid)
+            if ret_tuple is not None:
+                return map(ret_tuple._make, res)
+            return res
+        return nfunc
+    return deco
+
+
+@sql_utility()
 def construct_schema(thread: SQLThread, condition: Condition):
     """Constructs the SQLite schema."""
     sql_thread_logger.debug("Thread {} is constructing schema".format(get_ident()))
@@ -27,6 +35,7 @@ def construct_schema(thread: SQLThread, condition: Condition):
             uid INTEGER PRIMARY KEY NOT NULL,
             aggregateVoteCount INTEGER DEFAULT 0,
             roundVoteCount INTEGER DEFAULT 0,
+            timezone INTEGER DEFAULT 0,
             remindStart UNSIGNED BIG INT,
             remindInterval UNSIGNED BIG INT
         );""", ()),
@@ -74,8 +83,9 @@ def construct_schema(thread: SQLThread, condition: Condition):
     ], condition)
 
 
-@sql_util
+@sql_utility()
 def destroy_schema(thread: SQLThread, condition: Condition):
+    sql_thread_logger.debug("Thread {} is destroying schema".format(get_ident()))
     return thread.request([
         ("DROP TABLE Members;", ()),
         ("DROP TABLE Contestants;", ()),
@@ -85,7 +95,15 @@ def destroy_schema(thread: SQLThread, condition: Condition):
         ("DROP TABLE ResponseArchive;", ())
     ], condition)
 
+
+@sql_utility()
+def make_request(thread: SQLThread, condition: Condition, request: str, params: Tuple = ()):
+    sql_thread_logger.debug("Thread {} is making request: '{}' with params {}".format(get_ident(), request, str(params)))
+    return thread.request((request, params), condition)
+
+
 def snapshot_schema(thread: SQLThread, filename: str):
+    sql_thread_logger.debug("Thread {} is snapshotting schema to file {}".format(get_ident(), filename))
     orig = sqlite3.Connection(thread.db)
     backup = sqlite3.Connection(filename)
     with backup:
@@ -93,3 +111,8 @@ def snapshot_schema(thread: SQLThread, filename: str):
             orig.backup(backup)
     orig.close()
     backup.close()
+
+@sql_utility(Status)
+def get_status(thread: SQLThread, condition: Condition):
+    sql_thread_logger.debug("Thread {} requesting mTWOW status".format(get_ident()))
+    return thread.request(("SELECT * FROM Status", ()), condition)

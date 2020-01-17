@@ -17,8 +17,9 @@ class Administrator(commands.Cog):
             await ctx.send("Reloaded extension {:s}.".format(module))
         except commands.ExtensionNotFound:
             await ctx.send("Failed to reload extension {:s}: Not found.".format(module))
-        except commands.ExtensionFailed:
+        except commands.ExtensionFailed as e:
             await ctx.send("Failed to reload extension {:s}: Failed to set up.".format(module))
+            discord_logger.error(str(e.original))
         except commands.ExtensionNotLoaded:
             await ctx.send(
                 "Failed to reload extension {:s}: Not loaded yet. Please use load command to load extension first.".format(
@@ -45,9 +46,9 @@ class Administrator(commands.Cog):
             await ctx.send("Failed to load extension {:s}: Not found.".format(module))
         except commands.ExtensionAlreadyLoaded:
             await ctx.send("Failed to load extension {0:s}: {0:s} was already loaded.".format(module))
-        except commands.ExtensionFailed:
+        except commands.ExtensionFailed as e:
             await ctx.send("Failed to load extension {0:s}: {0:s} errored in its entry function.".format(module))
-
+            discord_logger.error(str(e.original))
 
 
 def setup(bot: commands.Bot):

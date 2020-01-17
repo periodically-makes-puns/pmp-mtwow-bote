@@ -37,11 +37,15 @@ class ColoredTerminalLogger(logging.Logger):
         if (self.getEffectiveLevel() <= logging.DEBUG):
             logging.Logger.debug(self, ColoredTerminalLogger.DEBUG + msg + ColoredTerminalLogger.RESET, *args, **kwargs)
 
-    def warning(self, msg: str, *args, **kwargs) -> str:
+    def warning(self, msg: str, *args, **kwargs):
         if (self.getEffectiveLevel() <= logging.WARNING):
             logging.Logger.warning(self, ColoredTerminalLogger.WARN + msg + ColoredTerminalLogger.RESET, *args,
                                    **kwargs)
 
-    def error(self, msg: str, *args, **kwargs) -> str:
+    def error(self, msg: str, *args, **kwargs):
         if (self.getEffectiveLevel() <= logging.ERROR):
             logging.Logger.error(self, ColoredTerminalLogger.FAIL + msg + ColoredTerminalLogger.RESET, *args, **kwargs)
+
+
+if __name__ == "__main__":
+    ColoredTerminalLogger.test()
