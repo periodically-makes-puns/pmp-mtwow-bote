@@ -1,27 +1,38 @@
 import logging
-from package.common.utils import data
 import sys
+
+from package.common.loggers import ColoredTerminalLogger
+logging.setLoggerClass(ColoredTerminalLogger)
 
 import discord
 from discord.ext import commands
 
-from package.common.sqlhandle import SQLThread
+from package.common.utils import data, sqlthread
+from package.common.sqlutils import construct_schema
 
 desc = """A generic miniTWOW Discord bot and website.
 Maintainer is currently PMPuns#5728."""
+
+
 discord_logger = logging.getLogger('discord')
 discord_logger.setLevel(logging.INFO)
 sql_logger = logging.getLogger("sqlite3")
 sql_logger.setLevel(logging.DEBUG)
+sql_thread_logger = logging.getLogger("sqlitethread")
+sql_thread_logger.setLevel(logging.DEBUG)
+
 handler = logging.StreamHandler(stream=sys.stdout)
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 discord_logger.addHandler(handler)
 sql_logger.addHandler(handler)
+sql_thread_logger.addHandler(handler)
+
 bot = commands.Bot(command_prefix=data["prefix"], description=desc)
 extensions = ["discord.admin"]
 
 
-sqlthread = SQLThread(data["db"])
+construct_schema(sqlthread)
+sql_thread_logger.debug("Constructed schema")
 
 @bot.event
 async def on_ready():

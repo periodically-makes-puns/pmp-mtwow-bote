@@ -2,4 +2,6 @@ venv
 secrets.json
 .idea
 __pycache__
-data.sqlite
+*.sqlite
+*.db
+tests
