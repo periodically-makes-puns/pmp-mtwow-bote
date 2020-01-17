@@ -9,9 +9,15 @@ from .sqlhandle import SQLThread
 
 sql_thread_logger = logging.getLogger("sqlitethread")
 Status = namedtuple("Status", ["id", "round_num", "prompt", "phase", "deadline", "start_time"])
+Contestant = namedtuple("Contestant", ["uid", "alive", "response_count", "allowed_response_count", "prized"])
+Response = namedtuple("Response", ["id", "uid", "rid", "response", "word_count", "confirmed_vote_count", "pending_vote_count"])
+Member = namedtuple("Member", ["uid", "vid", "total_votes", "round_votes", "timezone", "remind_in", "remind_every"])
+Vote = namedtuple("Vote", ["id", "vid", "vote_num", "seed", "vote"])
+Result = namedtuple("Result", ["round_num", "id", "uid", "rid", "rank", "response", "score", "skew"])
 
 
 def sql_utility(ret_tuple=None):
+    """Decorator method that casts SQL rows to a named tuple, or leaves them as is if no arg given"""
     def deco(func: Callable):
         def nfunc(thread: SQLThread, *args, **kwargs):
             cond = Condition()
@@ -33,6 +39,7 @@ def construct_schema(thread: SQLThread, condition: Condition):
     return thread.request([
         ("""CREATE TABLE IF NOT EXISTS Members (
             uid INTEGER PRIMARY KEY NOT NULL,
+            vid INTEGER UNIQUE,
             aggregateVoteCount INTEGER DEFAULT 0,
             roundVoteCount INTEGER DEFAULT 0,
             timezone INTEGER DEFAULT 0,
@@ -51,13 +58,14 @@ def construct_schema(thread: SQLThread, condition: Condition):
             uid INTEGER NOT NULL,
             rid INTEGER NOT NULL,
             response TEXT,
+            wordCount INTEGER,
             confirmedVoteCount INTEGER DEFAULT 0,
             pendingVoteCount INTEGER DEFAULT 0
         );""", ()),
         ("""CREATE TABLE IF NOT EXISTS Votes (
             id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            uid INTEGER NOT NULL,
             vid INTEGER NOT NULL,
+            vnum INTEGER NOT NULL,
             gseed TEXT UNIQUE NOT NULL,
             vote TEXT
         );""", ()),
@@ -112,7 +120,71 @@ def snapshot_schema(thread: SQLThread, filename: str):
     orig.close()
     backup.close()
 
+
 @sql_utility(Status)
 def get_status(thread: SQLThread, condition: Condition):
     sql_thread_logger.debug("Thread {} requesting mTWOW status".format(get_ident()))
     return thread.request(("SELECT * FROM Status", ()), condition)
+
+
+@sql_utility(Contestant)
+def get_contestant(thread: SQLThread, condition: Condition, uid: int):
+    sql_thread_logger.debug("Thread {} requesting Contestant {}'s data".format(get_ident(), uid))
+    return thread.request(("SELECT * FROM Contestants WHERE uid = ?;", (uid,)), condition)
+
+
+@sql_utility(Member)
+def get_voter(thread: SQLThread, condition: Condition, *, uid: int, vid: int):
+    if uid is not None:
+        sql_thread_logger.debug("Thread {} requesting Member with UID {}'s data".format(get_ident(), uid))
+        return thread.request(("SELECT * FROM Members WHERE uid = ?;", (uid, )), condition)
+    elif vid is not None:
+        sql_thread_logger.debug("Thread {} requesting Member with VID {}'s data".format(get_ident(), uid))
+        return thread.request(("SELECT * FROM Members WHERE vid = ?;", (vid, )), condition)
+    raise sqlite3.Error("No arguments provided to voter get function")
+
+
+@sql_utility(Vote)
+def get_vote(thread: SQLThread, condition: Condition, vid: int, votenum: int):
+    sql_thread_logger.debug("Thread {} requesting vote {} of the user with VID {}".format(get_ident(), votenum, vid))
+    return thread.request(("SELECT * FROM Votes WHERE vid = ? AND vnum = ?;", (vid, votenum)), condition)
+
+
+@sql_utility(Response)
+def get_response(thread: SQLThread, condition: Condition, uid: int, rid: int):
+    sql_thread_logger.debug("Thread {} requesting response {} of the user with VID {}".format(get_ident(), rid, uid))
+    return thread.request(("SELECT * FROM Votes WHERE uid = ? AND rid = ?;", (uid, rid)), condition)
+
+
+@sql_utility()
+def get_vids(thread: SQLThread, condition: Condition):
+    sql_thread_logger.debug("Thread {} requesting list of VIDs".format(get_ident()))
+    return thread.request(("SELECT vid FROM Members WHERE vid NOT NULL;", ()), condition)
+
+
+@sql_utility(Response)
+def get_responses(thread: SQLThread, condition: Condition, uid: int):
+    sql_thread_logger.debug("Thread {} requesting list of responses from UID {}".format(get_ident(), uid))
+    return thread.request(("SELECT * FROM Responses WHERE uid = ?;", (uid,)), condition)
+
+
+@sql_utility(Vote)
+def get_votes(thread: SQLThread, condition: Condition, vid: int):
+    sql_thread_logger.debug("Thread {} requesting list of votes from VID {}".format(get_ident(), vid))
+    return thread.request(("SELECT * FROM Votes WHERE vid = ?;", (vid,)), condition)
+
+
+def uid2vid(thread: SQLThread, uid: int):
+    cond = Condition()
+    cond.acquire()
+    oid = thread.request(("SELECT vid FROM Members WHERE uid = ?;", (uid,)), cond)
+    cond.wait()
+    return thread.get_result(oid)[0][0]
+
+
+def vid2uid(thread: SQLThread, vid: int):
+    cond = Condition()
+    cond.acquire()
+    oid = thread.request(("SELECT uid FROM Members WHERE vid = ?;", (vid,)), cond)
+    cond.wait()
+    return thread.get_result(oid)[0][0]

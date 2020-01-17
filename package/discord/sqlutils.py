@@ -66,7 +66,7 @@ class Database(commands.Cog):
             .add_field(name="Prompt", value=status.prompt) \
             .add_field(name="Phase", value=status.phase) \
             .add_field(name="Deadline of Current Phase", value=strftime("%a, %d %b %Y %H:%M:%S +0000",
-                                                                         gmtime(status.deadline / 1000))) \
+                                                                        gmtime(status.deadline / 1000))) \
             .set_footer(text=name_string(self.bot.get_user(self.bot.owner_id)))
         await ctx.send(embed=embed)
 
