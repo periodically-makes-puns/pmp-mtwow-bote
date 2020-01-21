@@ -8,7 +8,7 @@ logging.setLoggerClass(ColoredTerminalLogger)
 import discord
 from discord.ext import commands
 
-from package.common.utils import data, sqlthread
+from package.common.utils import data, sqlthread, InvalidTimeStringError
 from package.common.sqlutils import construct_schema
 
 desc = """A generic miniTWOW Discord bot and website.
@@ -74,6 +74,8 @@ async def on_command_error(ctx: commands.Context, error: commands.CommandError):
     elif isinstance(error, sqlite3.DatabaseError):
         sql_logger.error(str(error))
         await ctx.send("There was a SQL error while processing.", delete_after=5)
+    elif isinstance(error, InvalidTimeStringError):
+        await ctx.send("Invalid time argument provided.", delete_after=5)
 
 @bot.command(brief="Kills the bot.")
 @commands.is_owner()

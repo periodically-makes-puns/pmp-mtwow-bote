@@ -3,6 +3,7 @@ import sqlite3
 from threading import Condition, get_ident
 from typing import Callable, Tuple
 from collections import namedtuple
+from time import time_ns
 
 from package.common.rwlock import lock_read
 from .sqlhandle import SQLThread
@@ -16,7 +17,7 @@ Vote = namedtuple("Vote", ["id", "vid", "vote_num", "seed", "vote"])
 Result = namedtuple("Result", ["round_num", "id", "uid", "rid", "rank", "response", "score", "skew"])
 
 
-def sql_utility(ret_tuple=None):
+def sql_get(ret_tuple=None):
     """Decorator method that casts SQL rows to a named tuple, or leaves them as is if no arg given"""
     def deco(func: Callable):
         def nfunc(thread: SQLThread, *args, **kwargs):
@@ -31,8 +32,28 @@ def sql_utility(ret_tuple=None):
         return nfunc
     return deco
 
+def sql_run(handler: Callable = None, *params, **kwparams):
+    """Decorator method that allows for error handling"""
+    def deco(func: Callable):
+        def nfunc(thread: SQLThread, *args, **kwargs):
+            cond = Condition()
+            cond.acquire()
+            oid = func(thread, cond, *args, **kwargs)
+            cond.wait()
+            res = thread.get_result(oid)
+            if isinstance(res, sqlite3.Error):
+                if handler is not None:
+                    handler(res, *params, **kwparams)
+                    return None
+                else:
+                    raise res
+            else:
+                return res
+        return nfunc
+    return deco
 
-@sql_utility()
+
+@sql_get()
 def construct_schema(thread: SQLThread, condition: Condition):
     """Constructs the SQLite schema."""
     sql_thread_logger.debug("Thread {} is constructing schema".format(get_ident()))
@@ -91,7 +112,7 @@ def construct_schema(thread: SQLThread, condition: Condition):
     ], condition)
 
 
-@sql_utility()
+@sql_get()
 def destroy_schema(thread: SQLThread, condition: Condition):
     sql_thread_logger.debug("Thread {} is destroying schema".format(get_ident()))
     return thread.request([
@@ -104,9 +125,9 @@ def destroy_schema(thread: SQLThread, condition: Condition):
     ], condition)
 
 
-@sql_utility()
-def make_request(thread: SQLThread, condition: Condition, request: str, params: Tuple = ()):
-    sql_thread_logger.debug("Thread {} is making request: '{}' with params {}".format(get_ident(), request, str(params)))
+@sql_get()
+def get(thread: SQLThread, condition: Condition, request: str, params: Tuple[str] = ()):
+    sql_thread_logger.debug("Thread {} is making request: '{}' with params {}".format(get_ident(), request, " ".join(params)))
     return thread.request((request, params), condition)
 
 
@@ -121,19 +142,19 @@ def snapshot_schema(thread: SQLThread, filename: str):
     backup.close()
 
 
-@sql_utility(Status)
+@sql_get(Status)
 def get_status(thread: SQLThread, condition: Condition):
     sql_thread_logger.debug("Thread {} requesting mTWOW status".format(get_ident()))
     return thread.request(("SELECT * FROM Status", ()), condition)
 
 
-@sql_utility(Contestant)
+@sql_get(Contestant)
 def get_contestant(thread: SQLThread, condition: Condition, uid: int):
     sql_thread_logger.debug("Thread {} requesting Contestant {}'s data".format(get_ident(), uid))
     return thread.request(("SELECT * FROM Contestants WHERE uid = ?;", (uid,)), condition)
 
 
-@sql_utility(Member)
+@sql_get(Member)
 def get_voter(thread: SQLThread, condition: Condition, *, uid: int, vid: int):
     if uid is not None:
         sql_thread_logger.debug("Thread {} requesting Member with UID {}'s data".format(get_ident(), uid))
@@ -144,31 +165,31 @@ def get_voter(thread: SQLThread, condition: Condition, *, uid: int, vid: int):
     raise sqlite3.Error("No arguments provided to voter get function")
 
 
-@sql_utility(Vote)
+@sql_get(Vote)
 def get_vote(thread: SQLThread, condition: Condition, vid: int, votenum: int):
     sql_thread_logger.debug("Thread {} requesting vote {} of the user with VID {}".format(get_ident(), votenum, vid))
     return thread.request(("SELECT * FROM Votes WHERE vid = ? AND vnum = ?;", (vid, votenum)), condition)
 
 
-@sql_utility(Response)
+@sql_get(Response)
 def get_response(thread: SQLThread, condition: Condition, uid: int, rid: int):
     sql_thread_logger.debug("Thread {} requesting response {} of the user with VID {}".format(get_ident(), rid, uid))
     return thread.request(("SELECT * FROM Votes WHERE uid = ? AND rid = ?;", (uid, rid)), condition)
 
 
-@sql_utility()
+@sql_get()
 def get_vids(thread: SQLThread, condition: Condition):
     sql_thread_logger.debug("Thread {} requesting list of VIDs".format(get_ident()))
     return thread.request(("SELECT vid FROM Members WHERE vid NOT NULL;", ()), condition)
 
 
-@sql_utility(Response)
+@sql_get(Response)
 def get_responses(thread: SQLThread, condition: Condition, uid: int):
     sql_thread_logger.debug("Thread {} requesting list of responses from UID {}".format(get_ident(), uid))
     return thread.request(("SELECT * FROM Responses WHERE uid = ?;", (uid,)), condition)
 
 
-@sql_utility(Vote)
+@sql_get(Vote)
 def get_votes(thread: SQLThread, condition: Condition, vid: int):
     sql_thread_logger.debug("Thread {} requesting list of votes from VID {}".format(get_ident(), vid))
     return thread.request(("SELECT * FROM Votes WHERE vid = ?;", (vid,)), condition)
@@ -188,3 +209,34 @@ def vid2uid(thread: SQLThread, vid: int):
     oid = thread.request(("SELECT uid FROM Members WHERE vid = ?;", (vid,)), cond)
     cond.wait()
     return thread.get_result(oid)[0][0]
+
+
+@sql_run()
+def run(thread: SQLThread, condition: Condition, request: str, params: Tuple[str] = ()):
+    sql_thread_logger.debug("Thread {} is making request: '{}' with params {}".format(get_ident(), request, " ".join(params)))
+    return thread.request((request, params), condition)
+
+
+@sql_run()
+def set_time(thread: SQLThread, condition: Condition, start_time: int, time_left: int):
+    sql_thread_logger.debug("Thread {} is setting startTime to {} and deadline to {}"
+                            .format(get_ident(), start_time, time_left))
+    return thread.request(("UPDATE Status SET startTime = ?, deadline = ?;", (start_time, time_left)), condition)
+
+
+def get_deadline(thread: SQLThread):
+    sql_thread_logger.debug("Thread {} requesting the deadline.".format(get_ident()))
+    cond = Condition()
+    cond.acquire()
+    oid = thread.request(("SELECT startTime, deadline FROM Status;", ()), cond)
+    cond.wait()
+    return thread.get_result(oid)[0][0] + thread.get_result(oid)[0][1]
+
+
+def update_timers(thread: SQLThread):
+    thread.atomic.acquire()
+    cond = Condition()
+    ctime = time_ns() // 1000000
+    deadline = get_deadline(thread)
+    set_time(thread, ctime, deadline - ctime)
+    thread.atomic.release()

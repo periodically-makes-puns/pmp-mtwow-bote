@@ -1,7 +1,7 @@
 import json
 import logging
 import sys
-
+from time import strftime, gmtime
 
 from package.common.sqlhandle import SQLThread
 
@@ -120,6 +120,9 @@ def load_data(filename) -> dict:
 def name_string(user):
     return user.name + "#" + user.discriminator
 
+
+def format_time(time: int):
+    return strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime(time / 1000))
 
 discord_logger = logging.getLogger("discord")
 

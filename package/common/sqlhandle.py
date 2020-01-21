@@ -2,7 +2,7 @@ import logging
 import sqlite3
 from collections import namedtuple
 from queue import Queue
-from threading import Thread, Event, Condition, get_ident, Lock
+from threading import Thread, Event, Condition, get_ident, Lock, RLock
 from time import time_ns
 from typing import Union, List, Tuple, Dict
 
@@ -44,6 +44,7 @@ class SQLThread(Thread):
     conn: sqlite3.Connection
     cleanup: CleanupTimer
     db: str
+    atomic: RLock
 
     def __init__(self, db: str = ":memory:", cleantime: int = 1200):
         Thread.__init__(self)
@@ -55,6 +56,7 @@ class SQLThread(Thread):
         self._cthread = CleanupTimer(self, cleantime)
         self.db = db
         self.sql_resource = Lock()
+        self.atomic = RLock()
 
     def run(self):
         self.shutdown.clear()
@@ -107,11 +109,13 @@ class SQLThread(Thread):
         cond must be waited on or released after this function call."""
         if self.shutdown.is_set(): raise SQLThreadShuttingDownError("Thread is shutting down")
         sql_thread_logger.debug("Request from thread {}".format(get_ident()))
+        self.atomic.acquire()
         with lock_write(self.rwlock):
             oid = self._opcount
             self._ops.put((oid, query))
             self._results[oid] = cond
             self._opcount += 1
+        self.atomic.release()
         return oid
 
     def get_result(self, oid: int):
