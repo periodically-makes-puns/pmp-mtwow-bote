@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from ..common.sqlhandle import SQLThread
 from ..common.sqlutils import *
-from ..common.utils import sqlthread, name_string, parse_time, format_time
+from ..common.utils import sqlthread, name_string, parse_time, format_time, format_dhms
 
 discord_logger = getLogger('discord')
 
