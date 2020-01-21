@@ -77,6 +77,7 @@ class Database(commands.Cog):
             .add_field(name="Round Number", value=str(status.round_num)) \
             .add_field(name="Prompt", value=status.prompt) \
             .add_field(name="Phase", value=status.phase) \
+            .add_field(name="Time Left", value=format_dhms(status.deadline)) \
             .add_field(name="Deadline of Current Phase", value=format_time(status.start_time + status.deadline)) \
             .set_footer(text=name_string(self.bot.get_user(self.bot.owner_id)))
         await ctx.send(embed=embed)
@@ -84,7 +85,7 @@ class Database(commands.Cog):
     @commands.command(brief="Set the deadline.")
     @commands.is_owner()
     async def set_deadline(self, ctx: commands.Context, deadline: parse_time):
-        ctime = time_ns()
+        ctime = time_ns() // 1000000
         set_time(self.sql, ctime, deadline)
         await ctx.send("Set deadline to {}".format(format_time(ctime + deadline)))
 
@@ -93,6 +94,7 @@ class Database(commands.Cog):
     async def update_time(self, ctx: commands.Context):
         update_timers(self.sql)
         await ctx.send("Done.")
+
 
 def setup(bot: commands.Bot):
     bot.add_cog(Database(bot, sqlthread))

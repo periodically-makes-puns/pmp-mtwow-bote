@@ -122,7 +122,27 @@ def name_string(user):
 
 
 def format_time(time: int):
-    return strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime(time / 1000))
+    return strftime("%a, %d %b %Y %H:%M:%S UTC+0", gmtime(time / 1000))
+
+
+def format_dhms(time: int):
+    time //= 1000
+    ret = ""
+    if time > 86400:
+        ret += str(time // 86400) + "days "
+        time %= 86400
+    if time > 3600:
+        ret += str(time // 3600) + "hours "
+        time %= 3600
+    if time > 60:
+        ret += str(time // 60) + "minutes "
+        time %= 60
+    if time > 0:
+        ret += str(time % 60) + "seconds "
+    else:
+        ret = ret[0:-1]
+    return ret
+
 
 discord_logger = logging.getLogger("discord")
 
